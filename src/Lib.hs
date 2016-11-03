@@ -13,6 +13,7 @@ import Data.Aeson
 import Data.Aeson.Lens
 import GHC.IO.Handle hiding (hGetLine)
 import System.Command
+import System.IO (hReady)
 
 import ClassyPrelude
 import Haskakafka
@@ -33,24 +34,40 @@ startRink rinkPath = do
     hOut <- hOutM
     return (hIn, hOut)
 
+
+readHandleUntilNotReady :: Handle -> IO Text
+readHandleUntilNotReady hIn =
+  let readOutput handle results = do
+        handleReady <- hReady handle
+        case handleReady of
+          False -> return (unlines results)
+          True -> do
+            line <- hGetLine handle
+            readOutput handle (mappend results [line])
+  in
+    readOutput hIn []
+
+
 runRinkCmd :: (Handle, Handle) -> Text -> IO Text
 runRinkCmd (hIn, hOut) cmdStr = do
   let newCmdStr = ((replaceSeqStrictText "&gt;" ">") . (replaceSeqStrictText "&lt;" "<")) cmdStr
   hPutStrLn hIn newCmdStr
   hFlush hIn
-  hGetLine hOut
+  readHandleUntilNotReady hOut
 
 
 rinkCmdLooper :: (Handle, Handle) -> TChan SlackMessage -> TChan Text -> IO ()
 rinkCmdLooper (hIn, hOut) cmdQueue outQueue = do
   cmd <- atomically $ readTChan cmdQueue
-  putStrLn $ tshow cmd
   let rawInput = message cmd
   case (tailMay $ words rawInput) of
     Nothing -> rinkCmdLooper (hIn, hOut) cmdQueue outQueue
     Just others -> do
       output <- runRinkCmd (hIn, hOut) (unwords others)
-      atomically $ writeTChan outQueue $ slackPayloadWithChannel (channel cmd) output
+      let outputStripped = stripSuffix "\n" output
+      case outputStripped of
+        Nothing -> atomically $ writeTChan outQueue $ slackPayloadWithChannel (channel cmd) output
+        Just stripped -> atomically $ writeTChan outQueue $ slackPayloadWithChannel (channel cmd) stripped
       rinkCmdLooper (hIn, hOut) cmdQueue outQueue
 
 
