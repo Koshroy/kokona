@@ -53,7 +53,8 @@ runRinkCmd (hIn, hOut) cmdStr = do
   let newCmdStr = ((replaceSeqStrictText "&gt;" ">") . (replaceSeqStrictText "&lt;" "<")) cmdStr
   hPutStrLn hIn newCmdStr
   hFlush hIn
-  readHandleUntilNotReady hOut
+  --readHandleUntilNotReady hOut
+  hGetLine hOut
 
 
 rinkCmdLooper :: (Handle, Handle) -> TChan SlackMessage -> TChan Text -> IO ()
