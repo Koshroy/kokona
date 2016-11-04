@@ -120,7 +120,7 @@ producer :: TChan Text -> Kafka -> KafkaTopic -> IO ()
 producer queue kafka topic = do
   msg <- atomically $ readTChan queue
   putStrLn $ "producer: " ++ msg
-  -- let ex = "{\"channel\": \"#chatter-technical\", \"text\": \"Hello!\"}"
+  -- let ex = "{\"channel\": \"#chatter-technical\", \"text\": \"Hollo!\"}"
   produceMessage topic KafkaUnassignedPartition (KafkaProduceMessage $ encodeUtf8 msg)
   -- produceMessage topic KafkaUnassignedPartition (KafkaProduceMessage $ encodeUtf8 ex)
   producer queue kafka topic
@@ -134,7 +134,7 @@ producer queue kafka topic = do
 echoEmitter :: TChan SlackMessage -> TChan Text -> STM ()
 echoEmitter inQueue outQueue = do
   msg <- readTChan inQueue
-  writeTChan outQueue $ "{\"channel\": \"" ++ (channel msg) ++ "\", \"text\": \"Hello!\"}"
+  writeTChan outQueue $ "{\"channel\": \"" ++ (channel msg) ++ "\", \"text\": \"Hollo!\"}"
 
 
 kafkaProducerThread :: Text -> Text -> TChan Text -> IO ()
@@ -193,7 +193,7 @@ someFunc = do
   let producerTopicString = "papika_to_slack"
 
 --  consumerTId <- fork (kafkaConsumerThread brokerString consumerTopicString consumerQueue)
-  processorTId <- fork (processorThread "!hello" consumerQueue processorQueue)
+  processorTId <- fork (processorThread "!hollo" consumerQueue processorQueue)
   processorTId1 <- fork (processorThread "!calc" consumerQueue1 rinkQueue)
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
