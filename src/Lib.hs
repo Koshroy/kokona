@@ -2,12 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Lib
-    ( someFunc,
+    ( mainFunc,
 
       module ClassyPrelude,
       module Haskakafka
     ) where
 
+import Config
 import Control.Lens
 import Data.Aeson
 import Data.Aeson.Lens
@@ -121,15 +122,8 @@ producer :: TChan Text -> Kafka -> KafkaTopic -> IO ()
 producer queue kafka topic = do
   msg <- atomically $ readTChan queue
   putStrLn $ "producer: " ++ msg
-  -- let ex = "{\"channel\": \"#chatter-technical\", \"text\": \"Hollo!\"}"
   produceMessage topic KafkaUnassignedPartition (KafkaProduceMessage $ encodeUtf8 msg)
-  -- produceMessage topic KafkaUnassignedPartition (KafkaProduceMessage $ encodeUtf8 ex)
   producer queue kafka topic
-
-
--- channelEmitter :: TChan Text -> TChan Text -> STM ()
--- channelEmitter inQueue outQueue = do
---   payload <- readTChan
 
 
 echoEmitter :: TChan SlackMessage -> TChan Text -> STM ()
@@ -179,8 +173,15 @@ rinkThread rinkPath inputQueue outputQueue = do
       rinkCmdLooper (hIn, hOut) inputQueue outputQueue
 
 
-someFunc :: IO ()
-someFunc = do
+mainFunc :: FilePath -> IO ()
+mainFunc configPath = do
+  botConfigE <- getBotConfig configPath
+  case botConfigE of
+    Left err -> do
+      hPutStrLn stderr $ asText "Could not parse config, using defaults"
+      hPutStrLn stderr $ tshow err
+    Right _ -> return ()
+    
   putStrLn "Starting Kokona"
   consumerQueue <- newTChanIO
   producerQueue <- newTChanIO
@@ -189,24 +190,20 @@ someFunc = do
   rinkQueue <- newTChanIO
   consumerQueue1 <- atomically $ dupTChan consumerQueue  
 
-  let brokerString = "10.244.0.10:9092"
-  let consumerTopicString = "papika_from_slack"
-  let producerTopicString = "papika_to_slack"
+  let (brokerString, consumerTopicString, producerTopicString, rinkPathStr) =
+        case botConfigE of
+          Left _ -> ("localhost:9092", "consumer", "producer", "rink")
+          Right cfg -> (
+            (brokerAddr cfg), (consumerTopic cfg), (producerTopic cfg), (rinkPath cfg)
+            )
 
---  consumerTId <- fork (kafkaConsumerThread brokerString consumerTopicString consumerQueue)
   processorTId <- fork (processorThread "!hollo" consumerQueue processorQueue)
   processorTId1 <- fork (processorThread "!calc" consumerQueue1 rinkQueue)
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
   rinkTId <- fork (
-    rinkThread "/home/torifuda/src/rink-rs/target/release/rink" rinkQueue producerQueue
+    rinkThread rinkPathStr rinkQueue producerQueue
     )
 
   kafkaConsumerThread brokerString consumerTopicString consumerQueue
---  putStrLn "starting b"
---  kafkaProducerThread brokerString producerTopicString consumerQueue
-
---  putStrLn $ tshow consumerTId
---  putStrLn $ tshow processorTId
---  putStrLn $ tshow emitterTId
   putStrLn $ tshow producerTId
