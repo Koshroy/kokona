@@ -96,7 +96,7 @@ processCommandQueue command inQueue outQueue = do
                       False -> return slackText
                       True -> let payloadTextM = slackText ^? key "event" . key "text" . _String
                                   payloadChannelM = slackText ^? key "event" . key "channel" . _String in
-                                case slackText ^? key "event" . key "text" . _String of
+                                case payloadTextM of
                                   Nothing -> return slackText
                                   Just payloadText ->
                                     let payloadTextWords = words payloadText in
@@ -129,13 +129,14 @@ producer queue kafka topic = do
 echoEmitter :: TChan SlackMessage -> TChan Text -> STM ()
 echoEmitter inQueue outQueue = do
   msg <- readTChan inQueue
-  writeTChan outQueue $ "{\"channel\": \"" ++ (channel msg) ++ "\", \"text\": \"Hollo!\"}"
+  writeTChan outQueue $ slackPayloadWithChannel (channel msg) "Hollo!"
 
 
 kafkaProducerThread :: Text -> Text -> TChan Text -> IO ()
 kafkaProducerThread brokerString topicName producerQueue = do
   withKafkaProducer [] [] (unpack brokerString) (unpack topicName) (producer producerQueue)
   return ()
+
 
 kafkaConsumerThread :: Text -> Text -> TChan Text -> IO ()
 kafkaConsumerThread brokerString topicName consumerQueue = do
