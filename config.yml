@@ -1,4 +1,0 @@
-brokerAddr: 10.244.0.10:9092
-consumerTopic: papika_from_slack
-producerTopic: papika_to_slack
-rinkPath: /home/torifuda/src/rink-rs/target/release/rink
