@@ -3,40 +3,87 @@
 
 module Trip
   (
+    tripBodyParser,
+    tripVerbParser,
+    tripGerundParser,
+    Trip
   ) where
 
 import ClassyPrelude
-import Text.Parsec hiding ((<|>))
+import Data.List (insert)
+import Text.Parsec hiding ((<|>), many, optional, try)
+import qualified Text.Parsec as TP (try)
 
 data Transportation = Driving | Walking | Biking deriving (Eq, Show)
 
 data Trip = Trip
-  { source :: Text
-  , destination :: Text
+  { addresses :: [Text]
   , method :: Transportation
   } deriving (Eq, Show)
 
 fromStringMatch :: Parsec Text () Text
-fromStringMatch = pack <$> string "from"
+fromStringMatch = pack <$> string "<"
 
 toStringMatch :: Parsec Text () Text
 toStringMatch = pack <$> string "to"
 
+byStringMatch :: Parsec Text () Text
+byStringMatch = pack <$> string "@"
+
+verbTransport :: Parsec Text () Text
+verbTransport = pack <$>
+  ((TP.try (string "drive")) <|> (TP.try (string "walk")) <|> (string "bike"))
+
+gerundTransport :: Parsec Text () Text
+gerundTransport = pack <$>
+  ((TP.try (string "driving")) <|> (TP.try (string "walking")) <|> (string "biking"))
+
+fromVerbText :: Text -> Transportation
+fromVerbText t = case t of
+  "drive" -> Driving
+  "walk" -> Walking
+  "bike" -> Biking
+  _ -> Driving
+
+fromNounText :: Text -> Transportation
+fromNounText t = case t of
+  "driving" -> Driving
+  "walking" -> Walking
+  "biking" -> Biking
+  _ -> Driving
+
 comma :: Parsec Text () Char
 comma = char ','
 
-word :: Parsec Text () Text
-word = (pack . asString) <$> many1 (letter <|> comma)
+commaText :: Parsec Text () Text
+commaText = (pack . pure) <$> comma
 
 number :: Parsec Text () Text
 number = pack <$> many1 digit
 
-address :: Parsec Text () [Text]
-address = many1 (number <|> word)
+name :: Parsec Text () Text
+name = pack <$> (mappend <$> (many digit) <*> (many1 letter) <* (optional commaText))
 
-tripDesc :: Parsec Text () Trip
-tripDesc = buildTrip <$> address <*> toStringMatch <*> address
+seperator :: Parsec Text () Text
+seperator = pack <$> string "| "
 
-buildTrip :: [Text] -> Text -> [Text] -> Trip
-buildTrip src _ dest = Trip
-  { source = (unwords src), destination = (unwords dest), method = Driving }
+addressUnit :: Parsec Text () Text
+addressUnit = (TP.try name) <|> number
+
+address :: Parsec Text () Text
+address = unwords <$> (sepEndBy addressUnit space)
+
+tripBodyParser :: Parsec Text () [Text]
+tripBodyParser = sepEndBy address seperator
+
+tripVerbParser :: Parsec Text () Trip
+tripVerbParser = buildTrip <$>
+  (fromVerbText <$> verbTransport <* spaces) <*> ((fromStringMatch <* spaces) *> tripBodyParser)
+
+tripGerundParser :: Parsec Text () Trip
+tripGerundParser = (flip buildTrip) <$>
+  tripBodyParser <*> (fromNounText <$> ((byStringMatch <* spaces) *> gerundTransport))
+
+buildTrip :: Transportation -> [Text] -> Trip
+buildTrip transportation manyAddrs = Trip
+  { addresses = manyAddrs, method = transportation }
