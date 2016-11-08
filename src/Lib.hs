@@ -8,7 +8,10 @@ module Lib
       module Haskakafka
     ) where
 
+import Common
 import Config
+import Kansha
+
 import Control.Lens
 import Data.Aeson
 import Data.Aeson.Lens
@@ -19,10 +22,6 @@ import System.IO (hReady)
 import ClassyPrelude
 import Haskakafka
 
-data SlackMessage = SlackMessage
-  { channel :: Text
-  , message :: Text
-  } deriving (Eq, Show)
 
 
 startRink :: Text -> IO (Maybe (Handle, Handle))
@@ -156,11 +155,6 @@ emitterThread emitter inQueue outQueue = do
   emitterThread emitter inQueue outQueue
 
 
-slackPayloadWithChannel :: Text -> Text -> Text
-slackPayloadWithChannel channel payload =
-  "{\"channel\": \"" ++ channel ++ "\", \"text\": \"" ++ payload ++ "\"}"
-
-
 rinkThread :: Text -> TChan SlackMessage -> TChan Text -> IO ()
 rinkThread rinkPath inputQueue outputQueue = do
   handlesM <- startRink rinkPath
@@ -187,9 +181,11 @@ mainFunc configPath = do
   consumerQueue <- newTChanIO
   producerQueue <- newTChanIO
   processorQueue <- newTChanIO
+  kanshaQueue <- newTChanIO
 
   rinkQueue <- newTChanIO
-  consumerQueue1 <- atomically $ dupTChan consumerQueue  
+  consumerQueue1 <- atomically $ dupTChan consumerQueue
+  consumerQueue2 <- atomically $ dupTChan consumerQueue
 
   let (brokerString, consumerTopicString, producerTopicString, rinkPathStr) =
         case botConfigE of
@@ -200,7 +196,11 @@ mainFunc configPath = do
 
   processorTId <- fork (processorThread "!hollo" consumerQueue processorQueue)
   processorTId1 <- fork (processorThread "!calc" consumerQueue1 rinkQueue)
+  processorTId2 <- fork (processorThread "dhggs" consumerQueue2 kanshaQueue)
+
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
+  kanshaTId <- fork (emitterThread kanshaEmitter kanshaQueue producerQueue)
+  
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
   rinkTId <- fork (
     rinkThread rinkPathStr rinkQueue producerQueue
