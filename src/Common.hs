@@ -16,4 +16,5 @@ data SlackMessage = SlackMessage
 
 slackPayloadWithChannel :: Text -> Text -> Text
 slackPayloadWithChannel channel payload =
-  "{\"channel\": \"" ++ channel ++ "\", \"text\": \"" ++ payload ++ "\"}"
+  let cleanPayload = replaceSeq "\n" "" (replaceSeq "\"" "\\\"" payload) in
+    "{\"channel\": \"" ++ channel ++ "\", \"text\": \"" ++ cleanPayload ++ "\"}"
