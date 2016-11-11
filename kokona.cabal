@@ -29,6 +29,8 @@ library
   other-modules:       Config
                      , Common
                      , Kansha
+                     , Trip
+                     , Fortune
   default-language:    Haskell2010
 
 executable kokona-exe

@@ -10,6 +10,7 @@ module Lib
 
 import Common
 import Config
+import Fortune
 import Kansha
 
 import Control.Lens
@@ -182,10 +183,12 @@ mainFunc configPath = do
   producerQueue <- newTChanIO
   processorQueue <- newTChanIO
   kanshaQueue <- newTChanIO
+  fortuneQueue <- newTChanIO
 
   rinkQueue <- newTChanIO
   consumerQueue1 <- atomically $ dupTChan consumerQueue
   consumerQueue2 <- atomically $ dupTChan consumerQueue
+  consumerQueue3 <- atomically $ dupTChan consumerQueue
 
   let (brokerString, consumerTopicString, producerTopicString, rinkPathStr) =
         case botConfigE of
@@ -197,9 +200,11 @@ mainFunc configPath = do
   processorTId <- fork (processorThread "!hollo" consumerQueue processorQueue)
   processorTId1 <- fork (processorThread "!calc" consumerQueue1 rinkQueue)
   processorTId2 <- fork (processorThread "dhggs" consumerQueue2 kanshaQueue)
+  processorTId3 <- fork (processorThread "!fortune" consumerQueue3 fortuneQueue)
 
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
   kanshaTId <- fork (emitterThread kanshaEmitter kanshaQueue producerQueue)
+  fortuneTId <- fork (fortuneThread fortuneQueue producerQueue)
   
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
   rinkTId <- fork (
