@@ -8,13 +8,19 @@ module Common
     ) where
 
 import ClassyPrelude
+import Data.Aeson
+
 
 data SlackMessage = SlackMessage
   { channel :: Text
   , message :: Text
   } deriving (Eq, Show)
 
+instance ToJSON SlackMessage where
+  toJSON sm = object [
+    "channel" .= channel sm,
+    "text" .= message sm ]
+
 slackPayloadWithChannel :: Text -> Text -> Text
 slackPayloadWithChannel channel payload =
-  let cleanPayload = replaceSeq "\n" "" (replaceSeq "\"" "\\\"" payload) in
-    "{\"channel\": \"" ++ channel ++ "\", \"text\": \"" ++ cleanPayload ++ "\"}"
+  decodeUtf8 $ toStrict $ encode $ SlackMessage channel payload
