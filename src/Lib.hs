@@ -86,8 +86,8 @@ consumer queue kafka topic = do
   consumer queue kafka topic
 
 
-processCommandQueue :: Text -> TChan Text -> TChan SlackMessage -> STM Text
-processCommandQueue command inQueue outQueue = do
+processCommandQueue :: MessageAcceptor -> TChan Text -> TChan SlackMessage -> STM Text
+processCommandQueue acceptor inQueue outQueue = do
   slackText <- readTChan inQueue
   let payloadType = slackText ^? key "event" . key "type" . _String
   case payloadType of
@@ -99,23 +99,17 @@ processCommandQueue command inQueue outQueue = do
                                 case payloadTextM of
                                   Nothing -> return slackText
                                   Just payloadText ->
-                                    let payloadTextWords = words payloadText in
-                                      case (headMay payloadTextWords) of
-                                        Nothing -> return $ tshow payloadText
-                                        Just commandWord ->
-                                          case commandWord == command of
-                                            False -> return $ tshow payloadText
-                                            True -> do
-                                              case payloadChannelM of
-                                                Nothing ->
-                                                  writeTChan
-                                                  outQueue
-                                                  SlackMessage {channel = "", message = payloadText}
-                                                Just channelName -> 
-                                                  writeTChan
-                                                  outQueue
-                                                  SlackMessage {channel = channelName, message = payloadText}
-                                              return $ tshow payloadText
+                                    do
+                                      case (acceptor payloadText) of
+                                        False -> do
+                                          writeTChan outQueue $ SlackMessage {channel = "", message = ""}
+                                        True ->
+                                          case payloadChannelM of
+                                            Nothing -> do
+                                              writeTChan outQueue $ SlackMessage {channel = "", message = payloadText}
+                                            Just channelName -> do
+                                              writeTChan outQueue $ SlackMessage {channel = channelName, message = payloadText}
+                                      return payloadText
 
 
 producer :: TChan Text -> Kafka -> KafkaTopic -> IO ()
@@ -131,6 +125,10 @@ echoEmitter inQueue outQueue = do
   msg <- readTChan inQueue
   writeTChan outQueue $ slackPayloadWithChannel (channel msg) "Hollo!"
 
+papikaEmitter :: TChan SlackMessage -> TChan Text -> STM ()
+papikaEmitter inQueue outQueue = do
+  msg <- readTChan inQueue
+  writeTChan outQueue $ slackPayloadWithChannel (channel msg) "Cocona!"
 
 kafkaProducerThread :: Text -> Text -> TChan Text -> IO ()
 kafkaProducerThread brokerString topicName producerQueue = do
@@ -144,10 +142,10 @@ kafkaConsumerThread brokerString topicName consumerQueue = do
   return ()
 
 
-processorThread :: Text -> TChan Text -> TChan SlackMessage -> IO ()
-processorThread command inQueue outQueue = do
-  r <- atomically $ processCommandQueue command inQueue outQueue
-  processorThread command inQueue outQueue
+processorThread :: MessageAcceptor -> TChan Text -> TChan SlackMessage -> IO ()
+processorThread acceptor inQueue outQueue = do
+  r <- atomically $ processCommandQueue acceptor inQueue outQueue
+  processorThread acceptor inQueue outQueue
 
 
 emitterThread :: (TChan SlackMessage -> TChan Text -> STM ()) -> TChan SlackMessage -> TChan Text -> IO ()
@@ -184,11 +182,13 @@ mainFunc configPath = do
   processorQueue <- newTChanIO
   kanshaQueue <- newTChanIO
   fortuneQueue <- newTChanIO
+  papikaQueue <- newTChanIO
 
   rinkQueue <- newTChanIO
   consumerQueue1 <- atomically $ dupTChan consumerQueue
   consumerQueue2 <- atomically $ dupTChan consumerQueue
   consumerQueue3 <- atomically $ dupTChan consumerQueue
+  consumerQueue4 <- atomically $ dupTChan consumerQueue
 
   let (brokerString, consumerTopicString, producerTopicString, rinkPathStr) =
         case botConfigE of
@@ -197,14 +197,22 @@ mainFunc configPath = do
             (brokerAddr cfg), (consumerTopic cfg), (producerTopic cfg), (rinkPath cfg)
             )
 
-  processorTId <- fork (processorThread "!hollo" consumerQueue processorQueue)
-  processorTId1 <- fork (processorThread "!calc" consumerQueue1 rinkQueue)
-  processorTId2 <- fork (processorThread "dhggs" consumerQueue2 kanshaQueue)
-  processorTId3 <- fork (processorThread "!fortune" consumerQueue3 fortuneQueue)
+  let holloAcceptor = startMessageAcceptor "!hollo"
+  let calcAcceptor = startMessageAcceptor "!calc"
+  let dhggsAcceptor  = startMessageAcceptor "dhggs"
+  let fortuneAcceptor = startMessageAcceptor "!fortune"
+  let papikaAcceptor = textInMessageAcceptor "papika"
+  
+  processorTId <- fork (processorThread holloAcceptor consumerQueue processorQueue)
+  processorTId1 <- fork (processorThread calcAcceptor consumerQueue1 rinkQueue)
+  processorTId2 <- fork (processorThread dhggsAcceptor consumerQueue2 kanshaQueue)
+  processorTId3 <- fork (processorThread fortuneAcceptor consumerQueue3 fortuneQueue)
+  processorTId4 <- fork (processorThread papikaAcceptor consumerQueue4 papikaQueue)
 
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
   kanshaTId <- fork (emitterThread kanshaEmitter kanshaQueue producerQueue)
   fortuneTId <- fork (fortuneThread fortuneQueue producerQueue)
+  papikaTId <- fork (emitterThread papikaEmitter papikaQueue producerQueue)
   
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
   rinkTId <- fork (

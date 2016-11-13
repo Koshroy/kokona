@@ -42,11 +42,14 @@ startMessageAcceptorGenerator start message =
 
 
 startMessageAcceptor :: Text -> MessageAcceptor
-startMessageAcceptor start = startMessageAcceptorGenerator start
+startMessageAcceptor start =
+  startMessageAcceptorGenerator start
+
 
 textInMessageAcceptorGenerator :: Text -> Text -> Bool
 textInMessageAcceptorGenerator needle message =
-  isInfixOf needle message
+  isInfixOf needle (toLower message)
+
 
 textInMessageAcceptor :: Text -> MessageAcceptor
 textInMessageAcceptor needle =
