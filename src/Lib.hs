@@ -102,11 +102,11 @@ processCommandQueue acceptor inQueue outQueue = do
                                     do
                                       case (acceptor payloadText) of
                                         False -> do
-                                          writeTChan outQueue $ SlackMessage {channel = "", message = ""}
+                                          return ()
                                         True ->
                                           case payloadChannelM of
                                             Nothing -> do
-                                              writeTChan outQueue $ SlackMessage {channel = "", message = payloadText}
+                                              return ()
                                             Just channelName -> do
                                               writeTChan outQueue $ SlackMessage {channel = channelName, message = payloadText}
                                       return payloadText
