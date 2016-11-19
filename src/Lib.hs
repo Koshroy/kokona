@@ -212,7 +212,7 @@ mainFunc configPath = do
   emitterTId <- fork (emitterThread echoEmitter processorQueue producerQueue)
   kanshaTId <- fork (emitterThread kanshaEmitter kanshaQueue producerQueue)
   fortuneTId <- fork (fortuneThread fortuneQueue producerQueue)
-  papikaTId <- fork (emitterThread papikaEmitter papikaQueue producerQueue)
+--  papikaTId <- fork (emitterThread papikaEmitter papikaQueue producerQueue)
   
   producerTId <- fork (kafkaProducerThread brokerString producerTopicString producerQueue)
   rinkTId <- fork (
