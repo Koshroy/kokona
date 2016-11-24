@@ -72,9 +72,3 @@ botCommandThread consumerChan producerChan acceptor processor = do
   fork $ liftIO $ acceptorThread acceptor consumerChanDup acceptorChan
   fork $ processor acceptorChan producerChan
   return ()
-  --msg <- liftIO $ atomically $ readTChan inChan
-
--- acceptorThread ::
---   MonadIO m => MessageAcceptor -> (Text -> m SlackMessage) -> (TChan Text -> TChan SlackMessage -> m ())
--- acceptorThread acceptor processorFunc = do
---   atomically # processorFunc
