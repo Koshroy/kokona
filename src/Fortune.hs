@@ -2,20 +2,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Fortune
-    ( fortuneThread
+    ( fortuneEmitter
     ) where
 
 import Common
 
 import ClassyPrelude
 import System.Command
-
-fortuneThread :: TChan SlackMessage -> TChan Text -> IO ()
-fortuneThread cmdQueue outQueue = do
-  cmd <- atomically $ readTChan cmdQueue
-  payload <- fortuneEmitter cmd
-  atomically $ writeTChan outQueue payload
-  fortuneThread cmdQueue outQueue
 
 
 fortuneEmitter :: SlackMessage -> IO Text

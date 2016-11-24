@@ -9,7 +9,5 @@ import Common
 
 import ClassyPrelude
 
-kanshaEmitter :: TChan SlackMessage -> TChan Text -> STM ()
-kanshaEmitter inQueue outQueue = do
-    msg <- readTChan inQueue
-    writeTChan outQueue $ slackPayloadWithChannel (channel msg) "がんじゃ"
+kanshaEmitter :: SlackMessage -> IO Text
+kanshaEmitter msg = return $ slackPayloadWithChannel (channel msg) "がんじゃ"
